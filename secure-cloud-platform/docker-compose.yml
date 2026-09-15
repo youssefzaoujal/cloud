@@ -1,0 +1,19 @@
+services:
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: auth-service
+    ports:
+      - "3000:3000"
+
+  orders-service:
+    build: ./services/orders-service
+    container_name: orders-service
+    ports:
+      - "3001:3001"
+
+  notifications-service:
+    build: ./services/notifications-service
+    container_name: notifications-service
+    ports:
+      - "3002:3002"
