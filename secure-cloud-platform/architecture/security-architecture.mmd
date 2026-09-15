@@ -1,0 +1,15 @@
+flowchart TB
+    Client[Client] --> WAF[AWS WAF]
+    WAF --> ALB[ALB with TLS]
+    ALB --> Services[ECS services]
+
+    Services --> IAM[IAM task roles]
+    Services --> Secrets[Secrets Manager]
+    Secrets --> KMS[KMS encryption]
+    Services --> Logs[CloudWatch Logs]
+    Logs --> Trail[CloudTrail]
+    Trail --> Detection[GuardDuty + Security Hub]
+
+    Services --> DataSG[Security groups]
+    DataSG --> RDS[(Private RDS)]
+    DataSG --> Redis[(Private ElastiCache)]

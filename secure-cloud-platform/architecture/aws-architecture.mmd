@@ -1,0 +1,30 @@
+flowchart TB
+    Internet((Internet)) --> Route53[Route 53]
+    Route53 --> CloudFront[CloudFront]
+    CloudFront --> WAF[AWS WAF]
+    WAF --> ALB[Application Load Balancer]
+
+    subgraph VPC[AWS VPC]
+        subgraph ECS[Private ECS Fargate services]
+            Auth[auth-service]
+            Orders[orders-service]
+            Notifications[notifications-service]
+            CloudMap[Cloud Map service discovery]
+        end
+        RDS[(RDS PostgreSQL)]
+        ElastiCache[(ElastiCache Redis)]
+    end
+
+    ALB --> Auth
+    ALB --> Orders
+    ALB --> Notifications
+    Orders --> CloudMap
+    CloudMap --> Notifications
+    Auth --> RDS
+    Orders --> RDS
+    Orders --> ElastiCache
+    Notifications --> RDS
+
+    Secrets[Secrets Manager + KMS] -.-> ECS
+    Logs[CloudWatch Logs] -.-> ECS
+    Audit[CloudTrail / GuardDuty / Security Hub] -.-> VPC

@@ -1,0 +1,24 @@
+flowchart TB
+    subgraph Host[Developer host]
+        API[Published API ports]
+    end
+
+    subgraph Frontend[frontend network]
+        Auth[auth-service :3000]
+        Orders[orders-service :3001]
+        Notifications[notifications-service :3002]
+    end
+
+    subgraph Backend[backend network - internal]
+        PostgreSQL[(PostgreSQL)]
+        Redis[(Redis cache)]
+    end
+
+    API --> Auth
+    API --> Orders
+    API --> Notifications
+    Orders -->|Docker DNS| Notifications
+    Auth --> PostgreSQL
+    Orders --> PostgreSQL
+    Orders --> Redis
+    Notifications --> PostgreSQL

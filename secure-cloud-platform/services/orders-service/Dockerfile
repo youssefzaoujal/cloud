@@ -8,6 +8,8 @@ RUN npm ci --omit=dev
 
 COPY server.js ./
 
+USER node
+
 EXPOSE 3001
 
 CMD ["node", "server.js"]
