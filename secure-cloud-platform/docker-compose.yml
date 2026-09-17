@@ -44,7 +44,7 @@ services:
     environment:
       PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER:-secure_platform}:${POSTGRES_PASSWORD:-secure_platform_dev_password}@postgres:5432/${POSTGRES_DB:-secure_platform}
-      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET before starting the stack}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,7 +66,7 @@ services:
     environment:
       PORT: 3001
       DATABASE_URL: postgres://${POSTGRES_USER:-secure_platform}:${POSTGRES_PASSWORD:-secure_platform_dev_password}@postgres:5432/${POSTGRES_DB:-secure_platform}
-      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET before starting the stack}
       NOTIFICATIONS_URL: http://notifications-service:3002
       REDIS_URL: redis://redis:6379
     depends_on:
