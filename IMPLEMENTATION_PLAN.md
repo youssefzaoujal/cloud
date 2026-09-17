@@ -22,6 +22,7 @@ project. It deliberately distinguishes implemented local behaviour from the docu
 - [x] IAM, KMS, SCP, S3 and Config policy examples with placeholders documented.
 - [x] Well-Architected mapping, cost estimate and architecture decision records.
 - [x] GitHub Actions for application checks, dependency auditing, CloudFormation linting, policy validation and diagram rendering.
+- [x] Requirements coverage matrix mapping the graduation brief to concrete files and validation status.
 - [x] Local validation completed without AWS credentials.
 - [ ] Live AWS deployment evidence: optional and intentionally out of scope.
 - [ ] Console screenshots: not claimed until actually captured.

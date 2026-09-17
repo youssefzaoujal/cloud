@@ -50,6 +50,7 @@ reviewable AWS target design.
 | Estimated AWS monthly cost | [secure-cloud-platform/docs/cost-estimate.md](secure-cloud-platform/docs/cost-estimate.md) |
 | Architecture Decision Records | [secure-cloud-platform/docs/adr/](secure-cloud-platform/docs/adr/) |
 | Security controls evidence | [secure-cloud-platform/docs/security-controls.md](secure-cloud-platform/docs/security-controls.md) |
+| Requirements coverage matrix | [secure-cloud-platform/docs/requirements-coverage.md](secure-cloud-platform/docs/requirements-coverage.md) |
 | CI/CD design | [secure-cloud-platform/pipeline/README.md](secure-cloud-platform/pipeline/README.md) |
 | Demo and evidence policy | [secure-cloud-platform/demo/README.md](secure-cloud-platform/demo/README.md) |
 

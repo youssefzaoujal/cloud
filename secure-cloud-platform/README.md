@@ -17,6 +17,7 @@ This repository contains a reproducible containerized microservices platform des
 - [Architecture Diagrams](#architecture-diagrams)
 - [How to Reproduce the Diagrams](#how-to-reproduce-the-diagrams)
 - [Security Controls](#security-controls)
+- [Requirements Coverage](#requirements-coverage)
 - [SAA-C03 Coverage](#saa-c03-coverage)
 - [Verification](#verification)
 - [Project Structure](#project-structure)
@@ -148,6 +149,11 @@ The script writes `architecture/solution-architecture.png` next to the source fi
 The control-to-evidence matrix is available in [docs/security-controls.md](docs/security-controls.md).
 It distinguishes local controls from AWS target controls and does not claim live AWS screenshots or
 findings that were not captured.
+
+## Requirements Coverage
+
+The complete mapping from the Manara SAA-C03 brief to AWS services, learning outcomes and
+repository evidence is available in [docs/requirements-coverage.md](docs/requirements-coverage.md).
 
 ## SAA-C03 Coverage
 
