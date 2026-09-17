@@ -22,6 +22,9 @@ jobs:
           npm ci --prefix services/orders-service
           npm ci --prefix services/notifications-service
 
+      - name: Generate ephemeral CI secret
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Build containers
         run: docker compose build
 
@@ -56,7 +59,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Start stack
-        run: JWT_SECRET="$(openssl rand -hex 32)" docker compose up -d
+        run: docker compose up -d
 
       - name: Run health checks
         run: bash tests/health-checks.sh
