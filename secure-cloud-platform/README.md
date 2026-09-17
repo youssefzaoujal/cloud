@@ -16,6 +16,7 @@ This repository contains a reproducible containerized microservices platform des
 - [CloudFormation Infrastructure](#cloudformation-infrastructure)
 - [Architecture Diagrams](#architecture-diagrams)
 - [How to Reproduce the Diagrams](#how-to-reproduce-the-diagrams)
+- [Security Controls](#security-controls)
 - [SAA-C03 Coverage](#saa-c03-coverage)
 - [Verification](#verification)
 - [Project Structure](#project-structure)
@@ -119,6 +120,12 @@ python architecture/solution-architecture.py
 ```
 
 The script writes `architecture/solution-architecture.png` next to the source file.
+
+## Security Controls
+
+The control-to-evidence matrix is available in [docs/security-controls.md](docs/security-controls.md).
+It distinguishes local controls from AWS target controls and does not claim live AWS screenshots or
+findings that were not captured.
 
 ## SAA-C03 Coverage
 

@@ -20,6 +20,8 @@ A three-service Node.js platform (Auth, Orders, Notifications) built to run iden
 
 The full documentation, diagrams, IAM/KMS policy examples, Well-Architected mapping, cost estimate and architecture decision records live in [`secure-cloud-platform/`](secure-cloud-platform/).
 
+The delivery checklist is maintained in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
 ## Project Status
 
 The local application and its three Node.js services are implemented and tested with Docker
@@ -44,6 +46,9 @@ reviewable AWS target design.
 | Well-Architected Framework mapping | [secure-cloud-platform/docs/well-architected-mapping.md](secure-cloud-platform/docs/well-architected-mapping.md) |
 | Estimated AWS monthly cost | [secure-cloud-platform/docs/cost-estimate.md](secure-cloud-platform/docs/cost-estimate.md) |
 | Architecture Decision Records | [secure-cloud-platform/docs/adr/](secure-cloud-platform/docs/adr/) |
+| Security controls evidence | [secure-cloud-platform/docs/security-controls.md](secure-cloud-platform/docs/security-controls.md) |
+| CI/CD design | [secure-cloud-platform/pipeline/README.md](secure-cloud-platform/pipeline/README.md) |
+| Demo and evidence policy | [secure-cloud-platform/demo/README.md](secure-cloud-platform/demo/README.md) |
 
 ## Why local Docker Compose instead of a live AWS deployment?
 
