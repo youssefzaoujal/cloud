@@ -8,7 +8,11 @@ const { Pool } = require("pg");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "local-development-jwt-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    throw new Error("JWT_SECRET must be provided through the environment");
+}
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(helmet());
