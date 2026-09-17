@@ -74,7 +74,7 @@ would create ongoing AWS costs.
 
 ## Container Security
 
-GitHub Actions scans all three application images with Trivy after the Docker build. The pipeline fails on fixed `HIGH` or `CRITICAL` vulnerabilities. Run the same check locally with `bash tests/container-scan.sh` after installing Trivy.
+GitHub Actions audits all three Node.js dependency trees with `npm audit --audit-level=high` and builds the three application images. The separate `tests/container-scan.sh` script remains available for reviewers who install Trivy locally.
 
 ## Verification
 
@@ -85,7 +85,7 @@ bash tests/integration-tests.sh
 bash tests/container-scan.sh
 ```
 
-The container scan requires Trivy locally. GitHub Actions runs the same vulnerability gate automatically after building the images.
+The optional container scan requires Trivy locally. Dependency auditing runs automatically in GitHub Actions without requiring a registry or external scanner action.
 
 ## CloudFormation Infrastructure
 

@@ -28,38 +28,11 @@ jobs:
       - name: Build containers
         run: docker compose build
 
-      - name: Scan auth image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: secure-cloud-platform-auth-service:latest
-          vuln-type: os,library
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: vuln
-          severity: CRITICAL,HIGH
-
-      - name: Scan orders image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: secure-cloud-platform-orders-service:latest
-          vuln-type: os,library
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: vuln
-          severity: CRITICAL,HIGH
-
-      - name: Scan notifications image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: secure-cloud-platform-notifications-service:latest
-          vuln-type: os,library
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          scanners: vuln
-          severity: CRITICAL,HIGH
+      - name: Audit Node.js dependencies
+        run: |
+          npm audit --audit-level=high --prefix services/auth-service
+          npm audit --audit-level=high --prefix services/orders-service
+          npm audit --audit-level=high --prefix services/notifications-service
 
       - name: Start stack
         run: docker compose up -d

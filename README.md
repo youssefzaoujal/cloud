@@ -18,7 +18,7 @@ and [security/automated response](secure-cloud-platform/architecture/secure-arch
 
 A three-service Node.js platform (Auth, Orders, Notifications) built to run identically in two modes:
 
-1. **Local mode (implemented, tested, CI-verified):** Docker Compose, isolated internal network, health checks, container vulnerability scanning.
+1. **Local mode (implemented, tested, CI-verified):** Docker Compose, isolated internal network, health checks and dependency auditing.
 2. **AWS target mode (fully designed, not deployed to avoid cloud cost):** ECS Fargate, Cloud Map, RDS, ElastiCache, ALB + WAF + CloudFront + Route 53, and a full security control plane — KMS, Secrets Manager, GuardDuty, Security Hub, AWS Config, CloudTrail, IAM least-privilege roles and Service Control Policies.
 
 The full documentation, diagrams, IAM/KMS policy examples, Well-Architected mapping, cost estimate and architecture decision records live in [`secure-cloud-platform/`](secure-cloud-platform/).

@@ -21,7 +21,7 @@ project. It deliberately distinguishes implemented local behaviour from the docu
 - [x] CloudFormation target stacks for networking, application, security foundation and response.
 - [x] IAM, KMS, SCP, S3 and Config policy examples with placeholders documented.
 - [x] Well-Architected mapping, cost estimate and architecture decision records.
-- [x] GitHub Actions for application checks, CloudFormation linting, policy validation and diagram rendering.
+- [x] GitHub Actions for application checks, dependency auditing, CloudFormation linting, policy validation and diagram rendering.
 - [x] Local validation completed without AWS credentials.
 - [ ] Live AWS deployment evidence: optional and intentionally out of scope.
 - [ ] Console screenshots: not claimed until actually captured.
