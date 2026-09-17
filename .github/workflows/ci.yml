@@ -1,21 +1,30 @@
-name: CI
+name: Application CI
 
 on:
   push:
   pull_request:
 
+defaults:
+  run:
+    working-directory: secure-cloud-platform
+
 jobs:
-  validate:
+  validate-application:
+    name: Build, scan and test microservices
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js dependencies
         run: |
           npm ci --prefix services/auth-service
           npm ci --prefix services/orders-service
           npm ci --prefix services/notifications-service
+
       - name: Build containers
         run: docker compose build
+
       - name: Scan auth image
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -24,6 +33,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
       - name: Scan orders image
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -32,6 +42,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
       - name: Scan notifications image
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -40,14 +51,19 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
       - name: Start stack
         run: docker compose up -d
+
       - name: Run health checks
         run: bash tests/health-checks.sh
+
       - name: Run security checks
         run: bash tests/security-tests.sh
+
       - name: Run integration checks
         run: bash tests/integration-tests.sh
+
       - name: Stop stack
         if: always()
         run: docker compose down -v
