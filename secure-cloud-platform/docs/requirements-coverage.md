@@ -13,7 +13,7 @@ Legend: ✅ implemented as infrastructure code · 📄 designed and documented o
 | --- | --- | --- |
 | ECS Fargate | ✅ | `infrastructure/cloudformation/project-06/02-application.yaml`: ECS cluster, three task definitions, three services and autoscaling resources |
 | ECR | ✅ | `02-application.yaml`: three repositories with image scanning configuration |
-| ALB and target groups | ✅ | `02-application.yaml`: load balancer, listener, three target groups and path-based listener rules |
+| ALB and target groups | ✅ (HTTP review stack) / 📄 (HTTPS production target) | `02-application.yaml`: load balancer, HTTP listener, three target groups and path-based listener rules; ACM/WAF edge is documented as a target control |
 | AWS Cloud Map | ✅ | `02-application.yaml`: private DNS namespace and service discovery resources |
 | Secrets Manager | ✅ | `02-application.yaml`: secret resources and task-definition secret references |
 | ElastiCache Redis | ✅ | `02-application.yaml`: Redis replication group and subnet group |

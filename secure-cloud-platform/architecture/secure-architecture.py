@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from diagrams import Cluster, Diagram, Edge
-from diagrams.aws.compute import EC2, Lambda
+from diagrams.aws.compute import ECS, Lambda
 from diagrams.aws.database import RDS
 from diagrams.aws.integration import Eventbridge, SNS
 from diagrams.aws.management import Cloudtrail, Cloudwatch, Config, Organizations, SystemsManager
@@ -38,7 +38,7 @@ with Diagram(
             nat = NATGateway("NAT Gateway")
 
         with Cluster("Private subnets"):
-            application = EC2("EC2 Auto Scaling\nIMDSv2")
+            application = ECS("ECS Fargate services\nprivate subnets")
             endpoints = Endpoint("VPC endpoints\nS3 / KMS / SSM")
 
         with Cluster("Isolated data subnets"):

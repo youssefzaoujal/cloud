@@ -9,7 +9,7 @@ than a checklist exercise.
 | Practice | Evidence |
 |---|---|
 | Infrastructure as reproducible code | `docker-compose.yml` + `architecture/solution-architecture.py` (diagram-as-code) |
-| CI/CD with automated gates | `.github/workflows/ci.yml`: build → Trivy scan → health/security/integration tests, fails the pipeline on CRITICAL/HIGH vulnerabilities |
+| CI/CD with automated gates | `.github/workflows/ci.yml`: build → npm dependency audit → health/security/integration tests; `validate.yml` runs CloudFormation, policy and diagram validation |
 | Health checks on every service | `docker-compose.yml` healthcheck blocks; AWS target uses ALB target group health checks + ECS service auto-replacement |
 | Documented rollback | Blue/green via CodeDeploy in the ECS target (see `docs/aws-mapping.md`) |
 

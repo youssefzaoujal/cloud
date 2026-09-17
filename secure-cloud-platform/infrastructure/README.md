@@ -40,6 +40,14 @@ cfn-lint secure-cloud-platform/infrastructure/cloudformation/project-06/*.yaml s
 
 The same command runs in `.github/workflows/validate.yml` on every push and pull request.
 
+## Edge security and TLS scope
+
+The Project 6 application stack intentionally provisions an HTTP listener on port 80 so the target
+template can be reviewed and deployed without a registered domain or an ACM certificate. The
+production target shown in the diagrams adds HTTPS termination with ACM and WAF at the CloudFront
+edge. Adding those resources requires a certificate ARN and domain-specific parameters; they are
+therefore documented as target controls rather than hidden behind an unusable placeholder.
+
 ## Deployment status
 
 These templates are an AWS target design. The repository intentionally does not deploy them to a

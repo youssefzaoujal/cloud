@@ -64,7 +64,7 @@ with Diagram(
 		igw = InternetGateway("Internet Gateway")
 
 		with Cluster("Public subnets (AZ-a / AZ-b)"):
-			alb = ALB("Application Load Balancer\nHTTPS 443, path-based routing")
+			alb = ALB("Application Load Balancer\nHTTP demo / HTTPS target")
 			nat = NATGateway("NAT Gateway\n(1 per AZ)")
 
 		with Cluster("Private app subnets (AZ-a / AZ-b)"):
