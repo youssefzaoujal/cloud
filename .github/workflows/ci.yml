@@ -32,6 +32,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-auth-service:latest
+          vuln-type: os,library
           format: table
           exit-code: '1'
           ignore-unfixed: true
@@ -42,6 +43,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-orders-service:latest
+          vuln-type: os,library
           format: table
           exit-code: '1'
           ignore-unfixed: true
@@ -52,6 +54,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-notifications-service:latest
+          vuln-type: os,library
           format: table
           exit-code: '1'
           ignore-unfixed: true
