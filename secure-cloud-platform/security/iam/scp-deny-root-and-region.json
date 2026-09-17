@@ -1,0 +1,45 @@
+{
+  "_comment": "Example Service Control Policy (AWS Organizations) attached to the platform OU. Two controls SAA-C03 explicitly tests: deny root user usage, and restrict which regions resources can be created in.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyRootUser",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "aws:PrincipalArn": "arn:aws:iam::*:root"
+        }
+      }
+    },
+    {
+      "Sid": "DenyOutsideApprovedRegions",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:*",
+        "organizations:*",
+        "route53:*",
+        "cloudfront:*",
+        "support:*",
+        "budgets:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": ["eu-west-1", "us-east-1"]
+        }
+      }
+    },
+    {
+      "Sid": "DenyDisablingGuardDuty",
+      "Effect": "Deny",
+      "Action": [
+        "guardduty:DeleteDetector",
+        "guardduty:DisassociateFromMasterAccount",
+        "guardduty:StopMonitoringMembers"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

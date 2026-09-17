@@ -1,0 +1,58 @@
+{
+  "_comment": "Customer-managed KMS key policy for the platform CMK. Encrypts Secrets Manager secrets, RDS storage, and ElastiCache at-rest data. Key administration is separated from key usage — a common SAA-C03 exam point.",
+  "Version": "2012-10-17",
+  "Id": "secure-platform-cmk-policy",
+  "Statement": [
+    {
+      "Sid": "AccountRootFullAccess",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::ACCOUNT_ID:root" },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowKeyAdministration",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::ACCOUNT_ID:role/PlatformSecurityAdmin" },
+      "Action": [
+        "kms:Create*",
+        "kms:Describe*",
+        "kms:Enable*",
+        "kms:List*",
+        "kms:Put*",
+        "kms:Update*",
+        "kms:Revoke*",
+        "kms:Disable*",
+        "kms:Get*",
+        "kms:Delete*",
+        "kms:ScheduleKeyDeletion",
+        "kms:CancelKeyDeletion",
+        "kms:RotateKeyOnDemand"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowEcsTaskRolesToUseKeyOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::ACCOUNT_ID:role/secure-platform-auth-service-execution-role",
+          "arn:aws:iam::ACCOUNT_ID:role/secure-platform-orders-service-execution-role",
+          "arn:aws:iam::ACCOUNT_ID:role/secure-platform-notifications-service-execution-role"
+        ]
+      },
+      "Action": ["kms:Decrypt", "kms:DescribeKey"],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "secretsmanager.eu-west-1.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "AllowRdsAndElastiCacheServiceUse",
+      "Effect": "Allow",
+      "Principal": { "Service": ["rds.amazonaws.com", "elasticache.amazonaws.com"] },
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
+      "Resource": "*"
+    }
+  ]
+}
