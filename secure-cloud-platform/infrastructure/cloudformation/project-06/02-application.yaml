@@ -1,0 +1,805 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Project 6 - Stack 2/2 - Application platform. Creates the ECS Fargate
+  cluster, the three microservices (Auth, Orders, Notifications), the
+  Application Load Balancer with path-based routing, Cloud Map service
+  discovery, ECR repositories, ElastiCache Redis session store, RDS
+  PostgreSQL, Secrets Manager credentials and the CloudWatch observability
+  layer.
+
+  Depends on the exports of the network stack (01-network.yaml).
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack wiring
+        Parameters:
+          - NetworkStackName
+          - ProjectName
+          - EnvironmentName
+      - Label:
+          default: Container sizing
+        Parameters:
+          - TaskCpu
+          - TaskMemory
+          - DesiredCount
+      - Label:
+          default: Data tier
+        Parameters:
+          - DatabaseInstanceClass
+          - CacheNodeType
+
+Parameters:
+
+  NetworkStackName:
+    Type: String
+    Default: shop-dev-network
+    Description: Name of the deployed network stack whose outputs are imported.
+
+  ProjectName:
+    Type: String
+    Default: shop
+    AllowedPattern: '[a-z0-9-]+'
+
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+  TaskCpu:
+    Type: String
+    Default: '512'
+    AllowedValues: ['256', '512', '1024', '2048']
+    Description: Fargate task CPU units (1024 = 1 vCPU).
+
+  TaskMemory:
+    Type: String
+    Default: '1024'
+    AllowedValues: ['512', '1024', '2048', '4096']
+    Description: Fargate task memory in MiB.
+
+  DesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Tasks per service. Minimum 2 to survive an AZ failure.
+
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    AllowedValues: [db.t4g.micro, db.t4g.small, db.t4g.medium]
+    Description: Graviton-based instance class for cost and energy efficiency.
+
+  CacheNodeType:
+    Type: String
+    Default: cache.t4g.micro
+    AllowedValues: [cache.t4g.micro, cache.t4g.small]
+
+Conditions:
+
+  IsProduction: !Equals [!Ref EnvironmentName, 'prod']
+
+Resources:
+
+  # ------------------------------------------------------ ECR repositories ---
+
+  AuthRepository:
+    Type: AWS::ECR::Repository
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/auth'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      EmptyOnDelete: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only the 10 most recent images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+  OrdersRepository:
+    Type: AWS::ECR::Repository
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/orders'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      EmptyOnDelete: true
+
+  NotificationsRepository:
+    Type: AWS::ECR::Repository
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/notifications'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      EmptyOnDelete: true
+
+  # ------------------------------------------------------------ Data tier ---
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}/${EnvironmentName}/rds/credentials'
+      Description: RDS master credentials, generated and rotated by AWS
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "shopadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Isolated data-tier subnets
+      SubnetIds: !Split
+        - ','
+        - Fn::ImportValue: !Sub '${NetworkStackName}-IsolatedSubnets'
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentName}-db'
+      Engine: postgres
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: true
+      PubliclyAccessible: false
+      BackupRetentionPeriod: !If [IsProduction, 30, 7]
+      DeletionProtection: !If [IsProduction, true, false]
+      EnableIAMDatabaseAuthentication: true
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub '${NetworkStackName}-DatabaseSecurityGroupId'
+      EnableCloudwatchLogsExports: [postgresql, upgrade]
+
+  SecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DatabaseSecret
+      TargetId: !Ref Database
+      TargetType: AWS::RDS::DBInstance
+
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Isolated data-tier subnets for Redis
+      SubnetIds: !Split
+        - ','
+        - Fn::ImportValue: !Sub '${NetworkStackName}-IsolatedSubnets'
+
+  SessionCache:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription: Shared session store for stateless containers
+      Engine: redis
+      CacheNodeType: !Ref CacheNodeType
+      NumCacheClusters: 2
+      AutomaticFailoverEnabled: true
+      MultiAZEnabled: true
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub '${NetworkStackName}-CacheSecurityGroupId'
+
+  # ------------------------------------------------------- Load balancing ---
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-alb'
+      Type: application
+      Scheme: internet-facing
+      Subnets: !Split
+        - ','
+        - Fn::ImportValue: !Sub '${NetworkStackName}-PublicSubnets'
+      SecurityGroups:
+        - Fn::ImportValue: !Sub '${NetworkStackName}-AlbSecurityGroupId'
+      LoadBalancerAttributes:
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+        - Key: deletion_protection.enabled
+          Value: !If [IsProduction, 'true', 'false']
+
+  AuthTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-tg-auth'
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  OrdersTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-tg-orders'
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  NotificationsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-tg-notif'
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AuthTargetGroup
+
+  AuthListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/auth/*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AuthTargetGroup
+
+  OrdersListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 20
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/orders/*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref OrdersTargetGroup
+
+  NotificationsListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpListener
+      Priority: 30
+      Conditions:
+        - Field: path-pattern
+          Values: ['/api/notifications/*']
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref NotificationsTargetGroup
+
+  # ------------------------------------------------- Cluster and discovery ---
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${ProjectName}-${EnvironmentName}-cluster'
+      CapacityProviders: [FARGATE, FARGATE_SPOT]
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: !If [IsProduction, FARGATE, FARGATE_SPOT]
+          Weight: 1
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Sub 'internal.${ProjectName}.local'
+      Vpc:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      Description: Private DNS namespace for east-west service discovery
+
+  AuthDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: auth
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        NamespaceId: !Ref ServiceDiscoveryNamespace
+        DnsRecords:
+          - Type: A
+            TTL: 15
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  OrdersDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: orders
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        NamespaceId: !Ref ServiceDiscoveryNamespace
+        DnsRecords:
+          - Type: A
+            TTL: 15
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # ---------------------------------------------------------------- SNS ---
+
+  OrderEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${EnvironmentName}-order-events'
+      KmsMasterKeyId: alias/aws/sns
+
+  # ---------------------------------------------------------- IAM roles ---
+  # The execution role is used by the ECS agent (pull image, read secrets).
+  # The task roles are assumed by the application code itself. Keeping them
+  # separate, and scoping each task role to only the resources that service
+  # touches, is the least-privilege requirement.
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadDatabaseSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecret
+
+  AuthTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthServicePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [xray:PutTraceSegments, xray:PutTelemetryRecords]
+                Resource: '*'
+              - Effect: Allow
+                Action: [ssmmessages:CreateControlChannel, ssmmessages:CreateDataChannel,
+                         ssmmessages:OpenControlChannel, ssmmessages:OpenDataChannel]
+                Resource: '*'
+
+  OrdersTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: OrdersServicePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref OrderEventsTopic
+              - Effect: Allow
+                Action: [xray:PutTraceSegments, xray:PutTelemetryRecords]
+                Resource: '*'
+              - Effect: Allow
+                Action: [ssmmessages:CreateControlChannel, ssmmessages:CreateDataChannel,
+                         ssmmessages:OpenControlChannel, ssmmessages:OpenDataChannel]
+                Resource: '*'
+
+  NotificationsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: NotificationsServicePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ses:SendEmail, ses:SendRawEmail]
+                Resource: '*'
+              - Effect: Allow
+                Action: [xray:PutTraceSegments, xray:PutTelemetryRecords]
+                Resource: '*'
+
+  # ------------------------------------------------------------ Log groups ---
+
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/ecs/${ProjectName}-${EnvironmentName}/auth'
+      RetentionInDays: !If [IsProduction, 90, 14]
+
+  OrdersLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/ecs/${ProjectName}-${EnvironmentName}/orders'
+      RetentionInDays: !If [IsProduction, 90, 14]
+
+  NotificationsLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/ecs/${ProjectName}-${EnvironmentName}/notifications'
+      RetentionInDays: !If [IsProduction, 90, 14]
+
+  # ------------------------------------------------------ Task definitions ---
+
+  AuthTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${ProjectName}-${EnvironmentName}-auth'
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt AuthTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: auth
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}/auth:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: !Ref EnvironmentName
+            - Name: REDIS_HOST
+              Value: !GetAtt SessionCache.PrimaryEndPoint.Address
+            - Name: DB_HOST
+              Value: !GetAtt Database.Endpoint.Address
+          Secrets:
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub '${DatabaseSecret}:password::'
+            - Name: DB_USERNAME
+              ValueFrom: !Sub '${DatabaseSecret}:username::'
+          HealthCheck:
+            Command: [CMD-SHELL, 'curl -f http://localhost:3000/health || exit 1']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AuthLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+        - Name: xray-daemon
+          Image: public.ecr.aws/xray/aws-xray-daemon:latest
+          Essential: false
+          Cpu: 32
+          MemoryReservation: 256
+          PortMappings:
+            - ContainerPort: 2000
+              Protocol: udp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AuthLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: xray
+
+  OrdersTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${ProjectName}-${EnvironmentName}-orders'
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt OrdersTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: orders
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}/orders:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: !Ref EnvironmentName
+            # Service-to-service call resolved through Cloud Map private DNS,
+            # never a hardcoded IP and never leaving the VPC.
+            - Name: AUTH_SERVICE_URL
+              Value: !Sub 'http://auth.internal.${ProjectName}.local:3000'
+            - Name: REDIS_HOST
+              Value: !GetAtt SessionCache.PrimaryEndPoint.Address
+            - Name: DB_HOST
+              Value: !GetAtt Database.Endpoint.Address
+            - Name: ORDER_EVENTS_TOPIC
+              Value: !Ref OrderEventsTopic
+          Secrets:
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub '${DatabaseSecret}:password::'
+            - Name: DB_USERNAME
+              ValueFrom: !Sub '${DatabaseSecret}:username::'
+          HealthCheck:
+            Command: [CMD-SHELL, 'curl -f http://localhost:3000/health || exit 1']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref OrdersLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  NotificationsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${ProjectName}-${EnvironmentName}-notifications'
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt NotificationsTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: notifications
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}/notifications:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: !Ref EnvironmentName
+          HealthCheck:
+            Command: [CMD-SHELL, 'curl -f http://localhost:3000/health || exit 1']
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref NotificationsLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # ----------------------------------------------------------- ECS services ---
+
+  AuthService:
+    Type: AWS::ECS::Service
+    DependsOn: AuthListenerRule
+    Properties:
+      ServiceName: auth
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref AuthTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Split
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnets'
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${NetworkStackName}-EcsSecurityGroupId'
+      LoadBalancers:
+        - ContainerName: auth
+          ContainerPort: 3000
+          TargetGroupArn: !Ref AuthTargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AuthDiscoveryService.Arn
+
+  OrdersService:
+    Type: AWS::ECS::Service
+    DependsOn: OrdersListenerRule
+    Properties:
+      ServiceName: orders
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref OrdersTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Split
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnets'
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${NetworkStackName}-EcsSecurityGroupId'
+      LoadBalancers:
+        - ContainerName: orders
+          ContainerPort: 3000
+          TargetGroupArn: !Ref OrdersTargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt OrdersDiscoveryService.Arn
+
+  NotificationsService:
+    Type: AWS::ECS::Service
+    DependsOn: NotificationsListenerRule
+    Properties:
+      ServiceName: notifications
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref NotificationsTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Split
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnets'
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${NetworkStackName}-EcsSecurityGroupId'
+      LoadBalancers:
+        - ContainerName: notifications
+          ContainerPort: 3000
+          TargetGroupArn: !Ref NotificationsTargetGroup
+
+  # -------------------------------------------------------------- Scaling ---
+
+  OrdersScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub
+        - 'service/${Cluster}/${Service}'
+        - Cluster: !Ref EcsCluster
+          Service: !GetAtt OrdersService.Name
+      MinCapacity: !Ref DesiredCount
+      MaxCapacity: 10
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  OrdersScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: orders-request-count-target-tracking
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref OrdersScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 1000
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub
+            - '${AlbFullName}/${TgFullName}'
+            - AlbFullName: !GetAtt LoadBalancer.LoadBalancerFullName
+              TgFullName: !GetAtt OrdersTargetGroup.TargetGroupFullName
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # ------------------------------------------------------------- Alarming ---
+
+  OrdersErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${EnvironmentName}-orders-5xx'
+      AlarmDescription: >
+        Elevated 5XX rate on the Orders target group. Wired into the CodeDeploy
+        deployment group so a bad release is rolled back automatically.
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt OrdersTargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt LoadBalancer.LoadBalancerFullName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+
+  LoadBalancerDnsName:
+    Description: Public entry point of the application
+    Value: !GetAtt LoadBalancer.DNSName
+
+  ClusterName:
+    Description: ECS cluster name
+    Value: !Ref EcsCluster
+
+  ServiceDiscoveryNamespaceName:
+    Description: Private DNS namespace used for east-west calls
+    Value: !Sub 'internal.${ProjectName}.local'
+
+  DatabaseEndpoint:
+    Description: RDS writer endpoint (reachable only from the application tier)
+    Value: !GetAtt Database.Endpoint.Address
+
+  CacheEndpoint:
+    Description: Redis primary endpoint
+    Value: !GetAtt SessionCache.PrimaryEndPoint.Address
+
+  OrderEventsTopicArn:
+    Description: SNS topic carrying order lifecycle events
+    Value: !Ref OrderEventsTopic

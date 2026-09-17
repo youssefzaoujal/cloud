@@ -1,6 +1,7 @@
 # Secure Cloud-Native Microservices Platform
 
 [![CI](https://github.com/youssefzaoujal/cloud/actions/workflows/ci.yml/badge.svg)](https://github.com/youssefzaoujal/cloud/actions/workflows/ci.yml)
+[![Validate Infrastructure](https://github.com/youssefzaoujal/cloud/actions/workflows/validate.yml/badge.svg)](https://github.com/youssefzaoujal/cloud/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > AWS Solutions Architect – Associate (SAA-C03) graduation project — Manara.
@@ -19,6 +20,18 @@ A three-service Node.js platform (Auth, Orders, Notifications) built to run iden
 
 The full documentation, diagrams, IAM/KMS policy examples, Well-Architected mapping, cost estimate and architecture decision records live in [`secure-cloud-platform/`](secure-cloud-platform/).
 
+## Project Status
+
+The local application and its three Node.js services are implemented and tested with Docker
+Compose. The AWS target architecture is represented by four CloudFormation stacks, diagrams-as-
+code, and separate security policy examples. The templates and policies are validated in GitHub
+Actions with `cfn-lint` and JSON parsing on every push.
+
+The live AWS deployment is intentionally not included. It is an optional deliverable and would
+create ongoing costs for ECS Fargate, RDS, NAT Gateway, WAF and managed detection services. The
+repository therefore makes a clear distinction between implemented local software and a complete,
+reviewable AWS target design.
+
 ## Quick links
 
 | | |
@@ -27,6 +40,7 @@ The full documentation, diagrams, IAM/KMS policy examples, Well-Architected mapp
 | Architecture diagrams | [secure-cloud-platform/architecture/](secure-cloud-platform/architecture/) |
 | Security design (Project 8) | [secure-cloud-platform/docs/security.md](secure-cloud-platform/docs/security.md) |
 | IAM / KMS / Config policy examples | [secure-cloud-platform/security/](secure-cloud-platform/security/) |
+| CloudFormation infrastructure | [secure-cloud-platform/infrastructure/cloudformation/](secure-cloud-platform/infrastructure/cloudformation/) |
 | Well-Architected Framework mapping | [secure-cloud-platform/docs/well-architected-mapping.md](secure-cloud-platform/docs/well-architected-mapping.md) |
 | Estimated AWS monthly cost | [secure-cloud-platform/docs/cost-estimate.md](secure-cloud-platform/docs/cost-estimate.md) |
 | Architecture Decision Records | [secure-cloud-platform/docs/adr/](secure-cloud-platform/docs/adr/) |

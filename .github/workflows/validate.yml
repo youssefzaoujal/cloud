@@ -1,0 +1,87 @@
+name: Validate Infrastructure
+
+# Runs on every push and pull request. The badge this produces on the README
+# is evidence that the CloudFormation in this repository is syntactically
+# valid and passes AWS resource-specification checks, independently of
+# whether a live deployment exists.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+
+  cfn-lint:
+    name: Lint CloudFormation templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cfn-lint
+        run: pip install --upgrade cfn-lint
+
+      - name: Lint every template
+        run: |
+          cfn-lint \
+            secure-cloud-platform/infrastructure/cloudformation/project-06/*.yaml \
+            secure-cloud-platform/infrastructure/cloudformation/project-08/*.yaml
+
+  policy-validation:
+    name: Validate IAM and resource policies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Verify every policy file is valid JSON
+        run: |
+          set -e
+          found=0
+          for file in $(find secure-cloud-platform/security -name '*.json'); do
+            echo "Checking $file"
+            python3 -m json.tool "$file" > /dev/null
+            found=$((found + 1))
+          done
+          echo "Validated $found policy documents"
+
+  diagram-render:
+    name: Render architecture diagrams
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Graphviz and diagrams
+        run: |
+          sudo apt-get update && sudo apt-get install -y graphviz
+          pip install diagrams
+
+      - name: Regenerate both diagrams
+        run: |
+          cd secure-cloud-platform/architecture
+          python ecs-architecture.py
+          python secure-architecture.py
+          python solution-architecture.py
+
+      - name: Fail if a committed diagram is stale
+        run: |
+          if [ -n "$(git status --porcelain '*.png')" ]; then
+            echo "A diagram source changed but the committed PNG was not regenerated."
+            git status --porcelain '*.png'
+            exit 1
+          fi
+          echo "Committed diagrams match their source."

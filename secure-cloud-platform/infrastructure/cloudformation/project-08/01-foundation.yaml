@@ -1,0 +1,472 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Project 8 - Stack 1/2 - Security foundation. Creates the customer-managed
+  KMS keys with administrator/user separation, the tamper-evident CloudTrail
+  log archive, the AWS Config recorder and the encrypted SNS topic used by
+  the response layer.
+
+  Deploy this stack before 02-detection-response.yaml.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Naming
+        Parameters:
+          - ProjectName
+      - Label:
+          default: Security contacts and roles
+        Parameters:
+          - SecurityAdminRoleName
+          - SecurityNotificationEmail
+      - Label:
+          default: Retention
+        Parameters:
+          - LogRetentionDays
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: securecloud
+    AllowedPattern: '[a-z0-9-]+'
+
+  SecurityAdminRoleName:
+    Type: String
+    Default: SecurityAdmin
+    Description: >
+      IAM role allowed to administer the KMS keys. This role manages the key
+      lifecycle but is deliberately NOT granted Decrypt.
+
+  SecurityNotificationEmail:
+    Type: String
+    Default: security@example.com
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: Address subscribed to critical security findings.
+
+  LogRetentionDays:
+    Type: Number
+    Default: 365
+    MinValue: 90
+    MaxValue: 3650
+    Description: Retention applied to the CloudTrail archive before expiry.
+
+Resources:
+
+  # -------------------------------------------------------------- KMS keys ---
+  # Three separate customer-managed keys rather than one: a compromise of the
+  # application tier must not grant access to the audit log archive, and key
+  # rotation or deletion can be reasoned about per data domain.
+
+  DataKey:
+    Type: AWS::KMS::Key
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      Description: CMK for application data - S3, RDS, EBS
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: data-key-policy
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowKeyAdministrationNotUse
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${SecurityAdminRoleName}'
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: AllowServiceUseViaAwsServices
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService':
+                  - !Sub 's3.${AWS::Region}.amazonaws.com'
+                  - !Sub 'rds.${AWS::Region}.amazonaws.com'
+                  - !Sub 'ec2.${AWS::Region}.amazonaws.com'
+
+  DataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-data'
+      TargetKeyId: !Ref DataKey
+
+  LogsKey:
+    Type: AWS::KMS::Key
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      Description: CMK for the audit log archive - CloudTrail, Config
+      EnableKeyRotation: true
+      PendingWindowInDays: 30
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: logs-key-policy
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrailEncrypt
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: kms:GenerateDataKey*
+            Resource: '*'
+            Condition:
+              StringLike:
+                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: AllowCloudTrailDescribe
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: kms:DescribeKey
+            Resource: '*'
+          - Sid: AllowConfigEncrypt
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+
+  LogsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-logs'
+      TargetKeyId: !Ref LogsKey
+
+  SecretsKey:
+    Type: AWS::KMS::Key
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      Description: CMK for Secrets Manager and SSM Parameter Store
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: secrets-key-policy
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowSecretsManagerUse
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService':
+                  - !Sub 'secretsmanager.${AWS::Region}.amazonaws.com'
+                  - !Sub 'ssm.${AWS::Region}.amazonaws.com'
+
+  SecretsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-secrets'
+      TargetKeyId: !Ref SecretsKey
+
+  # ---------------------------------------------------------- Log archive ---
+  # Object Lock in COMPLIANCE mode means no principal, including the account
+  # root, can delete an audit record before its retention expires. This is
+  # what makes the trail evidence rather than merely a log.
+
+  LogArchiveBucket:
+    Type: AWS::S3::Bucket
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: This bucket is itself the access-log destination.
+    Properties:
+      BucketName: !Sub '${ProjectName}-log-archive-${AWS::AccountId}-${AWS::Region}'
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: COMPLIANCE
+            Days: 90
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref LogsKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TierAndExpireAuditLogs
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+              - StorageClass: DEEP_ARCHIVE
+                TransitionInDays: 180
+            ExpirationInDays: !Ref LogRetentionDays
+
+  LogArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogArchiveBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt LogArchiveBucket.Arn
+              - !Sub '${LogArchiveBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: AllowCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LogArchiveBucket.Arn
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LogArchiveBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+          - Sid: AllowConfigAclCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: [s3:GetBucketAcl, s3:ListBucket]
+            Resource: !GetAtt LogArchiveBucket.Arn
+          - Sid: AllowConfigWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LogArchiveBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ---------------------------------------------------------- CloudTrail ---
+
+  TrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}'
+      RetentionInDays: 90
+
+  TrailLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteTrailEvents
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub '${TrailLogGroup.Arn}:*'
+
+  Trail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: LogArchiveBucketPolicy
+    Properties:
+      TrailName: !Sub '${ProjectName}-trail'
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref LogsKey
+      S3BucketName: !Ref LogArchiveBucket
+      CloudWatchLogsLogGroupArn: !Sub '${TrailLogGroup.Arn}:*'
+      CloudWatchLogsRoleArn: !GetAtt TrailLogRole.Arn
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          # Data events are scoped to the log archive only. Enabling them on
+          # every bucket multiplies the CloudTrail bill for little signal.
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub '${LogArchiveBucket.Arn}/'
+
+  # -------------------------------------------------------------- Config ---
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: DeliverConfigSnapshots
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${LogArchiveBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': bucket-owner-full-control
+              - Effect: Allow
+                Action: s3:GetBucketAcl
+                Resource: !GetAtt LogArchiveBucket.Arn
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${ProjectName}-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn: LogArchiveBucketPolicy
+    Properties:
+      Name: !Sub '${ProjectName}-delivery-channel'
+      S3BucketName: !Ref LogArchiveBucket
+      S3KeyPrefix: !Sub 'AWSLogs/${AWS::AccountId}/Config'
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # ----------------------------------------------------- Notification topic ---
+
+  SecurityAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-security-alerts'
+      DisplayName: Security findings requiring attention
+      KmsMasterKeyId: alias/aws/sns
+
+  SecurityAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SecurityAlertsTopic
+      Protocol: email
+      Endpoint: !Ref SecurityNotificationEmail
+
+  SecurityAlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref SecurityAlertsTopic]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref SecurityAlertsTopic
+
+Outputs:
+
+  DataKeyArn:
+    Description: CMK protecting application data
+    Value: !GetAtt DataKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataKeyArn'
+
+  LogsKeyArn:
+    Description: CMK protecting the audit log archive
+    Value: !GetAtt LogsKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsKeyArn'
+
+  SecretsKeyArn:
+    Description: CMK protecting secrets and parameters
+    Value: !GetAtt SecretsKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsKeyArn'
+
+  LogArchiveBucketName:
+    Description: Tamper-evident audit log archive
+    Value: !Ref LogArchiveBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogArchiveBucket'
+
+  SecurityAlertsTopicArn:
+    Description: SNS topic used by the automated response layer
+    Value: !Ref SecurityAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertsTopicArn'
+
+  TrailArn:
+    Description: Multi-region CloudTrail with log file validation enabled
+    Value: !GetAtt Trail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TrailArn'

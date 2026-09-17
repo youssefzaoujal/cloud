@@ -1,0 +1,61 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowDeveloperServices",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*",
+        "ecs:*",
+        "ecr:*",
+        "s3:*",
+        "rds:*",
+        "logs:*",
+        "cloudwatch:*",
+        "lambda:*",
+        "sns:*",
+        "sqs:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyPrivilegeEscalationViaIam",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateUser",
+        "iam:CreateAccessKey",
+        "iam:AttachUserPolicy",
+        "iam:PutUserPolicy",
+        "iam:DeleteUserPermissionsBoundary",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RequireBoundaryOnCreatedRoles",
+      "Effect": "Deny",
+      "Action": ["iam:CreateRole", "iam:PutRolePolicy", "iam:AttachRolePolicy"],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::123456789012:policy/DeveloperBoundary"
+        }
+      }
+    },
+    {
+      "Sid": "DenyTouchingSecurityInfrastructure",
+      "Effect": "Deny",
+      "Action": [
+        "guardduty:*",
+        "securityhub:*",
+        "cloudtrail:*",
+        "config:*",
+        "organizations:*",
+        "kms:ScheduleKeyDeletion",
+        "kms:DisableKey"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

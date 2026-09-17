@@ -1,0 +1,53 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyInsecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::app-data-bucket",
+        "arn:aws:s3:::app-data-bucket/*"
+      ],
+      "Condition": {
+        "Bool": { "aws:SecureTransport": "false" }
+      }
+    },
+    {
+      "Sid": "DenyUnencryptedObjectUploads",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::app-data-bucket/*",
+      "Condition": {
+        "StringNotEquals": { "s3:x-amz-server-side-encryption": "aws:kms" }
+      }
+    },
+    {
+      "Sid": "DenyWrongKmsKey",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::app-data-bucket/*",
+      "Condition": {
+        "StringNotEqualsIfExists": {
+          "s3:x-amz-server-side-encryption-aws-kms-key-id": "arn:aws:kms:eu-west-1:123456789012:key/REPLACE-WITH-DATA-KEY-ID"
+        }
+      }
+    },
+    {
+      "Sid": "DenyOutdatedTlsVersions",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::app-data-bucket",
+        "arn:aws:s3:::app-data-bucket/*"
+      ],
+      "Condition": {
+        "NumericLessThan": { "s3:TlsVersion": "1.2" }
+      }
+    }
+  ]
+}

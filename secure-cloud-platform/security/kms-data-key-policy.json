@@ -1,0 +1,67 @@
+{
+  "Version": "2012-10-17",
+  "Id": "data-key-policy",
+  "Statement": [
+    {
+      "Sid": "EnableIAMUserPermissions",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::123456789012:root" },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowKeyAdministrationNotUse",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::123456789012:role/SecurityAdmin" },
+      "Action": [
+        "kms:Create*",
+        "kms:Describe*",
+        "kms:Enable*",
+        "kms:List*",
+        "kms:Put*",
+        "kms:Update*",
+        "kms:Revoke*",
+        "kms:Disable*",
+        "kms:Get*",
+        "kms:Delete*",
+        "kms:TagResource",
+        "kms:UntagResource",
+        "kms:ScheduleKeyDeletion",
+        "kms:CancelKeyDeletion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowApplicationUseViaAwsServicesOnly",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::123456789012:role/AppInstanceRole" },
+      "Action": [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": [
+            "s3.eu-west-1.amazonaws.com",
+            "rds.eu-west-1.amazonaws.com",
+            "ec2.eu-west-1.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "AllowGrantCreationForAwsServices",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::123456789012:role/AppInstanceRole" },
+      "Action": ["kms:CreateGrant", "kms:ListGrants", "kms:RevokeGrant"],
+      "Resource": "*",
+      "Condition": {
+        "Bool": { "kms:GrantIsForAWSResource": "true" }
+      }
+    }
+  ]
+}

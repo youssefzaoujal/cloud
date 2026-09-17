@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import ECS
 from diagrams.aws.database import ElastiCache, RDS
@@ -9,7 +11,7 @@ from diagrams.onprem.client import Users
 
 with Diagram(
 	"AWS Secure Cloud Platform - Target Architecture",
-	filename="architecture/solution-architecture",
+	filename=str(Path(__file__).with_name("solution-architecture")),
 	show=False,
 	direction="LR",
 	graph_attr={"splines": "ortho", "nodesep": "0.65", "ranksep": "1.0"},
