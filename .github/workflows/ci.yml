@@ -37,6 +37,21 @@ jobs:
       - name: Start stack
         run: docker compose up -d
 
+      - name: Wait for API services
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:3000/health >/dev/null \
+              && curl --fail --silent http://localhost:3001/health >/dev/null \
+              && curl --fail --silent http://localhost:3002/health >/dev/null; then
+              echo "All API services are healthy"
+              exit 0
+            fi
+            echo "Waiting for API services (attempt $attempt/30)"
+            sleep 2
+          done
+          docker compose ps
+          exit 1
+
       - name: Run health checks
         run: bash tests/health-checks.sh
 
