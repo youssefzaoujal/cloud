@@ -100,8 +100,10 @@ stacks for Project 8. `cfn-lint` validates all four templates in the root GitHub
 - [Security architecture](architecture/security-architecture.md)
 - [AWS target diagram source](architecture/solution-architecture.py)
 - [AWS target diagram image](architecture/solution-architecture.png)
+- [ECS Fargate diagram](architecture/ecs-architecture.png) and [source](architecture/ecs-architecture.py)
+- [Security controls diagram](architecture/secure-architecture.png) and [source](architecture/secure-architecture.py)
 
-The diagrams are stored as Mermaid and Python source so they remain reviewable, reproducible and suitable for presentation exports.
+The diagrams are stored as Mermaid and Python source so they remain reviewable, reproducible and suitable for presentation exports. The three PNGs cover the functional AWS target, the ECS delivery platform and the security control plane.
 
 ## How to Reproduce the Diagrams
 

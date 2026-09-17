@@ -1,8 +1,9 @@
-# Optional Demo Checklist (high ROI, low effort)
+# Optional Demo Checklist
 
-The instructions mark a live URL / recorded video as optional but encouraged. Full AWS deployment
-isn't required to produce convincing evidence — these all run locally in under 10 minutes and are
-worth far more to a jury than the text alone:
+The live AWS URL, recorded video and console screenshots are optional deliverables. They are not
+included in this repository because no live AWS deployment was performed; see
+[`docs/adr/0002-local-implementation-vs-live-deployment.md`](adr/0002-local-implementation-vs-live-deployment.md).
+The local evidence path is reproducible without AWS credentials:
 
 - [ ] **90-second screen recording** of `docker compose up --build -d` → `docker compose ps`
       showing all 5 containers healthy → `curl` calls to register, login, create an order,
@@ -11,12 +12,11 @@ worth far more to a jury than the text alone:
       vulnerabilities — this is your strongest single piece of evidence for the Security domain
 - [ ] **Screenshot of `tests/security-tests.sh` passing** (rejected request without JWT, rejected
       SQL-injection-style payload, etc.)
-- [ ] **Regenerate `solution-architecture.png`** right before submission (`python
-      architecture/solution-architecture.py`) so it's committed as an actual image, not just
-      referenced — GitHub renders `.mmd` Mermaid files but a jury skimming the repo should see the
-      diagram inline in the README without clicking through
+- [x] **Regenerate the architecture PNGs** with the three scripts under `architecture/`; the
+      outputs are committed and checked by GitHub Actions.
 - [ ] Add the repo **description and topics** on GitHub (Settings → General): e.g. "aws",
       "saa-c03", "ecs-fargate", "microservices", "security" — a repo with zero topics reads as
       unfinished before the jury even opens a file
 
-None of this requires an AWS account or any spend.
+The optional AWS evidence must only be added after it has actually been captured. Do not commit
+credentials, secret values, fabricated screenshots or an unverified Security Hub score.

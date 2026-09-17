@@ -1,6 +1,8 @@
 # Demo Package
 
-This directory is reserved for evidence that is actually produced during a review.
+This directory is reserved for evidence that is actually produced during a review. No live AWS
+deployment evidence is included in the current submission; this is intentional and documented in
+[`docs/adr/0002-local-implementation-vs-live-deployment.md`](../docs/adr/0002-local-implementation-vs-live-deployment.md).
 
 ## Local demo
 
