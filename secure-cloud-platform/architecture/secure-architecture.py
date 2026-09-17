@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import EC2, Lambda
 from diagrams.aws.database import RDS
@@ -11,7 +13,7 @@ from diagrams.onprem.client import Users
 
 with Diagram(
     "Project 8 - Secure Multi-Tier Architecture",
-    filename="secure-architecture",
+    filename=str(Path(__file__).with_name("secure-architecture")),
     show=False,
     direction="LR",
     graph_attr={"fontsize": "20", "bgcolor": "white", "pad": "0.6", "splines": "spline", "nodesep": "0.7", "ranksep": "1.1"},

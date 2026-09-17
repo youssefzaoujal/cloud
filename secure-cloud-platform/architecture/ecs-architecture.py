@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import ECR, Fargate
 from diagrams.aws.database import Elasticache, RDS
@@ -12,7 +14,7 @@ from diagrams.onprem.vcs import Github
 
 with Diagram(
     "Project 6 - ECS Fargate Microservices with Service Discovery",
-    filename="ecs-architecture",
+    filename=str(Path(__file__).with_name("ecs-architecture")),
     show=False,
     direction="LR",
     graph_attr={"fontsize": "20", "bgcolor": "white", "pad": "0.6", "splines": "spline", "nodesep": "0.7", "ranksep": "1.0"},

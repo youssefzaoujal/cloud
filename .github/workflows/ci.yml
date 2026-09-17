@@ -26,7 +26,7 @@ jobs:
         run: docker compose build
 
       - name: Scan auth image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-auth-service:latest
           format: table
@@ -35,7 +35,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Scan orders image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-orders-service:latest
           format: table
@@ -44,7 +44,7 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Scan notifications image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: secure-cloud-platform-notifications-service:latest
           format: table
