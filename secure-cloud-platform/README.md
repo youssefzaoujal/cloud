@@ -105,6 +105,26 @@ stacks for Project 8. `cfn-lint` validates all four templates in the root GitHub
 
 The diagrams are stored as Mermaid and Python source so they remain reviewable, reproducible and suitable for presentation exports. The three PNGs cover the functional AWS target, the ECS delivery platform and the security control plane.
 
+### Detailed Views
+
+#### Project 6 - ECS Fargate and Service Discovery
+
+This view expands the container platform: CI/CD, ECS Fargate services, Cloud Map service
+discovery, RDS, ElastiCache, SNS and observability.
+
+![ECS Fargate architecture](architecture/ecs-architecture.png)
+
+Source: [architecture/ecs-architecture.py](architecture/ecs-architecture.py)
+
+#### Project 8 - Security and Automated Response
+
+This view expands the defense-in-depth controls: edge protection, IAM guardrails, KMS, Secrets
+Manager, CloudTrail, GuardDuty, Config, Security Hub, EventBridge, Lambda and SSM Automation.
+
+![Security architecture](architecture/secure-architecture.png)
+
+Source: [architecture/secure-architecture.py](architecture/secure-architecture.py)
+
 ## How to Reproduce the Diagrams
 
 Install the Python package and Graphviz once:

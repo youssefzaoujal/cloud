@@ -11,6 +11,9 @@
 
 ![Target AWS architecture](secure-cloud-platform/architecture/solution-architecture.png)
 
+The repository also includes two detailed views: [ECS Fargate](secure-cloud-platform/architecture/ecs-architecture.png)
+and [security/automated response](secure-cloud-platform/architecture/secure-architecture.png).
+
 ## What this project demonstrates
 
 A three-service Node.js platform (Auth, Orders, Notifications) built to run identically in two modes:
